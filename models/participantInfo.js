@@ -1,48 +1,46 @@
 import mongoose from "mongoose";
 
-const participantInfoSchema =  new mongoose.Schema ({
-    fName:{
-      type:String,
-      required:true
-    },
-    lName:{
-     type:String,
-     required:true
-    },
-    gender:{
-        type:String,
-        required:true
-    },
-    dob:{
-        type:Date,
-        required:true
-    },
-    phone:{
-        type:Number,
-        required:true
-    },
-    email:{
-        type:String,
-        required:true
-    },
-    state:{
-        type:String,
-        required:true
-    },
-    city:{
-      type:String,
-      required:true
-    },
-    therapistType:{
-        type:String,
-        required:true
-    },
-    enrollmentId:{
-        type:String ,
-        required:true
-    }
+const participantInfoSchema = new mongoose.Schema({
+  fName: {
+    type: String,
+  },
+  lName: {
+    type: String,
+  },
+  gender: {
+    type: String,
+  },
+  dob: {
+    type: Date,
+  },
+  phone: {
+    type: Number,
+  },
+  email: {
+    type: String,
+    required: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  state: {
+    type: String,
+  },
+  city: {
+    type: String,
+  },
+  therapistType: {
+    type: String,
+  },
+  enrollmentId: {
+    type: String,
+  },
 });
 
-const ParticipantInfo = mongoose.model("ParticipantInfo",participantInfoSchema);
+const ParticipantInfo = mongoose.model(
+  "ParticipantInfo",
+  participantInfoSchema
+);
 
 export default ParticipantInfo;

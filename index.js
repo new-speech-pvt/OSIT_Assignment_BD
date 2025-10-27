@@ -15,7 +15,7 @@ app.use(cors({
 }));
 
 //Database 
-dbconnection();
+await dbconnection();
 
 app.get("/", (req, res) => {
   res.send("this is my localhost");

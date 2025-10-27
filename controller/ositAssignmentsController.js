@@ -7,43 +7,58 @@ import OSITAssignment from "../models/OSIT_Assignment.js";
 import ParticipantInfo from "../models/participantInfo.js";
 
 // ✅ CREATE OSIT ASSIGNMENT (with transaction)
+
 const createOSITAssignment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { participantInfo, childProfile, assignmentDetail, interventionPlan } = req.body;
-
-    // ✅ Validate participantInfo
-    const {
-      fName,
-      lName,
-      gender,
-      dob,
-      phone,
-      email,
-      state,
-      city,
-      therapistType,
-      enrollmentId,
-    } = participantInfo || {};
-
-    if (
-      !fName ||
-      !lName ||
-      !gender ||
-      !dob ||
-      !phone ||
-      !email ||
-      !state ||
-      !city ||
-      !therapistType ||
-      !enrollmentId
-    ) {
-      return res.status(400).json({ message: "Please fill all fields for participantInfo" });
+    // Ensure user is authenticated and req.user is available
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: "Unauthorized: User not authenticated." });
     }
 
-    // ✅ Validate childProfile
+    const participantId = req.user._id;
+    const { participantInfo, childProfile, assignmentDetail, interventionPlan } = req.body;
+
+    // --- Update ParticipantInfo (excluding email & password) ---
+    const participantUpdate = {};
+    if (participantInfo) {
+      const {
+        fName, lName, gender, dob, phone,
+        state, city, therapistType, enrollmentId
+      } = participantInfo;
+
+      if (!fName || !lName || !gender || !dob || !phone || !state || !city || !therapistType || !enrollmentId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "All participant fields are required (fName, lName, gender, dob, phone, state, city, therapistType, enrollmentId)." 
+        });
+      }
+
+      Object.assign(participantUpdate, {
+        fName, lName, gender, dob, phone,
+        state, city, therapistType, enrollmentId
+      });
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: "participantInfo object is required." 
+      });
+    }
+
+    // Update existing participant (email & password remain unchanged)
+    const updatedParticipant = await ParticipantInfo.findByIdAndUpdate(
+      participantId,
+      { $set: participantUpdate },
+      { new: true, session, runValidators: true }
+    );
+
+    if (!updatedParticipant) {
+      throw new Error("Failed to update participant information.");
+    }
+
+    // --- Validate and Create ChildProfile ---
     const {
       name: childName,
       dob: childDob,
@@ -54,10 +69,25 @@ const createOSITAssignment = async (req, res) => {
     } = childProfile || {};
 
     if (!childName || !childDob || !childGender || !diagnosis || !presentComplaint || !medicalHistory) {
-      return res.status(400).json({ message: "Please fill all fields for childProfile" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "All childProfile fields are required." 
+      });
     }
 
-    // ✅ Validate assignmentDetail
+    const createdChild = await ChildProfile.create(
+      [{
+        name: childName,
+        dob: childDob,
+        gender: childGender,
+        diagnosis,
+        presentComplaint,
+        medicalHistory
+      }],
+      { session }
+    );
+
+    // --- Validate and Create AssignmentDetail ---
     const {
       problemStatement,
       identificationAndObjectiveSetting,
@@ -71,20 +101,34 @@ const createOSITAssignment = async (req, res) => {
       !planningAndToolSection ||
       !toolStrategiesApproaches
     ) {
-      return res.status(400).json({ message: "Please fill all fields for assignmentDetail" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "All assignmentDetail fields are required." 
+      });
     }
 
-    // ✅ Validate interventionPlan
+    const createdAssignment = await AssignmentDetail.create(
+      [{
+        problemStatement,
+        identificationAndObjectiveSetting,
+        planningAndToolSection,
+        toolStrategiesApproaches
+      }],
+      { session }
+    );
+
+    // --- Validate and Create InterventionPlan ---
     const { week1, week2, week3, week4, week5, mentionToolUsedForRespectiveGoal } =
       interventionPlan || {};
 
     if (!week1 || !week2 || !week3 || !week4 || !week5 || !mentionToolUsedForRespectiveGoal) {
       return res.status(400).json({
-        message: "Please fill all fields for interventionPlan (weeks and mentionToolUsedForRespectiveGoal)",
+        success: false,
+        message: "All 5 weeks and mentionToolUsedForRespectiveGoal are required in interventionPlan."
       });
     }
 
-    // ✅ Helper: Validate each week structure
+    // Helper: Validate week structure
     const validateWeek = (week) => {
       if (!week.sessions || !Array.isArray(week.sessions) || week.sessions.length === 0) return false;
       for (const session of week.sessions) {
@@ -97,58 +141,199 @@ const createOSITAssignment = async (req, res) => {
 
     if (![week1, week2, week3, week4, week5].every(validateWeek)) {
       return res.status(400).json({
-        message: "Invalid week structure. Check sessionNo, goal[], and activity[].",
+        success: false,
+        message: "Invalid week structure: each week must have sessions with sessionNo, goal[], and activity[]."
       });
     }
 
-    // ✅ Create sub-documents inside transaction
-    const createdParticipant = await ParticipantInfo.create(
-      [{ fName, lName, gender, dob, phone, email, state, city, therapistType, enrollmentId }],
-      { session }
-    );
-
-    const createdChild = await ChildProfile.create(
-      [{ name: childName, dob: childDob, gender: childGender, diagnosis, presentComplaint, medicalHistory }],
-      { session }
-    );
-
-    const createdAssignment = await AssignmentDetail.create(
-      [{ problemStatement, identificationAndObjectiveSetting, planningAndToolSection, toolStrategiesApproaches }],
-      { session }
-    );
-
     const createdIntervention = await InterventionPlan.create(
-      [{ week1, week2, week3, week4, week5, mentionToolUsedForRespectiveGoal }],
+      [{
+        week1, week2, week3, week4, week5,
+        mentionToolUsedForRespectiveGoal
+      }],
       { session }
     );
 
-    // ✅ Create main OSIT document
+    // --- Create Main OSIT Assignment ---
     const createdOSIT = await OSITAssignment.create(
-      [
-        {
-          participantInfo: createdParticipant[0]._id,
-          childProfile: createdChild[0]._id,
-          assignmentDetail: createdAssignment[0]._id,
-          interventionPlan: createdIntervention[0]._id,
-        },
-      ],
+      [{
+        participantInfo: updatedParticipant._id,
+        childProfile: createdChild[0]._id,
+        assignmentDetail: createdAssignment[0]._id,
+        interventionPlan: createdIntervention[0]._id,
+      }],
       { session }
     );
 
     await session.commitTransaction();
-    session.endSession();
 
     return res.status(201).json({
-      message: "OSIT Assignment created successfully",
-      ositAssignment: createdOSIT[0],
+      success: true,
+      message: "OSIT Assignment created successfully.",
+      data: {
+        ositAssignmentId: createdOSIT[0]._id,
+        participantId: updatedParticipant._id,
+      }
     });
+
   } catch (error) {
     await session.abortTransaction();
+    console.error("OSIT Assignment creation failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create OSIT Assignment.",
+      // eslint-disable-next-line no-undef
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  } finally {
     session.endSession();
-    console.error("Transaction failed:", error);
-    res.status(500).json({ message: "Internal Server Error, rolled back", error: error.message });
   }
 };
+
+
+// const createOSITAssignment = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { participantInfo, childProfile, assignmentDetail, interventionPlan } = req.body;
+
+//     // ✅ Validate participantInfo
+//     const {
+//       fName,
+//       lName,
+//       gender,
+//       dob,
+//       phone,
+//       email,
+//       state,
+//       city,
+//       therapistType,
+//       enrollmentId,
+//     } = participantInfo || {};
+
+//     if (
+//       !fName ||
+//       !lName ||
+//       !gender ||
+//       !dob ||
+//       !phone ||
+//       !email ||
+//       !state ||
+//       !city ||
+//       !therapistType ||
+//       !enrollmentId
+//     ) {
+//       return res.status(400).json({ message: "Please fill all fields for participantInfo" });
+//     }
+
+//     // ✅ Validate childProfile
+//     const {
+//       name: childName,
+//       dob: childDob,
+//       gender: childGender,
+//       diagnosis,
+//       presentComplaint,
+//       medicalHistory,
+//     } = childProfile || {};
+
+//     if (!childName || !childDob || !childGender || !diagnosis || !presentComplaint || !medicalHistory) {
+//       return res.status(400).json({ message: "Please fill all fields for childProfile" });
+//     }
+
+//     // ✅ Validate assignmentDetail
+//     const {
+//       problemStatement,
+//       identificationAndObjectiveSetting,
+//       planningAndToolSection,
+//       toolStrategiesApproaches,
+//     } = assignmentDetail || {};
+
+//     if (
+//       !problemStatement ||
+//       !identificationAndObjectiveSetting ||
+//       !planningAndToolSection ||
+//       !toolStrategiesApproaches
+//     ) {
+//       return res.status(400).json({ message: "Please fill all fields for assignmentDetail" });
+//     }
+
+//     // ✅ Validate interventionPlan
+//     const { week1, week2, week3, week4, week5, mentionToolUsedForRespectiveGoal } =
+//       interventionPlan || {};
+
+//     if (!week1 || !week2 || !week3 || !week4 || !week5 || !mentionToolUsedForRespectiveGoal) {
+//       return res.status(400).json({
+//         message: "Please fill all fields for interventionPlan (weeks and mentionToolUsedForRespectiveGoal)",
+//       });
+//     }
+
+//     // ✅ Helper: Validate each week structure
+//     const validateWeek = (week) => {
+//       if (!week.sessions || !Array.isArray(week.sessions) || week.sessions.length === 0) return false;
+//       for (const session of week.sessions) {
+//         if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
+//         if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
+//         if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
+//       }
+//       return true;
+//     };
+
+//     if (![week1, week2, week3, week4, week5].every(validateWeek)) {
+//       return res.status(400).json({
+//         message: "Invalid week structure. Check sessionNo, goal[], and activity[].",
+//       });
+//     }
+
+//     // ✅ Create sub-documents inside transaction
+//     const createdParticipant = await ParticipantInfo.create(
+//       [{ fName, lName, gender, dob, phone, email, state, city, therapistType, enrollmentId }],
+//       { session }
+//     );
+
+//     const createdChild = await ChildProfile.create(
+//       [{ name: childName, dob: childDob, gender: childGender, diagnosis, presentComplaint, medicalHistory }],
+//       { session }
+//     );
+
+//     const createdAssignment = await AssignmentDetail.create(
+//       [{ problemStatement, identificationAndObjectiveSetting, planningAndToolSection, toolStrategiesApproaches }],
+//       { session }
+//     );
+
+//     const createdIntervention = await InterventionPlan.create(
+//       [{ week1, week2, week3, week4, week5, mentionToolUsedForRespectiveGoal }],
+//       { session }
+//     );
+
+//     // ✅ Create main OSIT document
+//     const createdOSIT = await OSITAssignment.create(
+//       [
+//         {
+//           participantInfo: createdParticipant[0]._id,
+//           childProfile: createdChild[0]._id,
+//           assignmentDetail: createdAssignment[0]._id,
+//           interventionPlan: createdIntervention[0]._id,
+//         },
+//       ],
+//       { session }
+//     );
+
+//     await session.commitTransaction();
+//     session.endSession();
+
+//     return res.status(201).json({
+//       message: "OSIT Assignment created successfully",
+//       ositAssignment: createdOSIT[0],
+//     });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     console.error("Transaction failed:", error);
+//     res.status(500).json({ message: "Internal Server Error, rolled back", error: error.message });
+//   }
+// };
 
 // ✅ GET ALL ASSIGNMENTS
 const getAllOSITAssignments = async (req, res) => {
