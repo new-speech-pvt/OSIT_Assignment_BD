@@ -9,8 +9,8 @@ const dbcannection = async () => {
         console.log("database connection");
 
     } catch (error) {
-
         console.log(error);
+        process.exit(1)
 
     }
 }
