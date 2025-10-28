@@ -3,6 +3,7 @@ import express from "express";
 import dbconnection from "./config/db.js";
 import cors from "cors";
 import ositAssignment from "./Routes/ositAssignmentRoute.js";
+import { authRoutes } from './Routes/auth.js';
 
 const app = express();
 const port = 3000;
@@ -21,6 +22,7 @@ app.get("/", (req, res) => {
   res.send("this is my localhost");
 });
 
+app.use("/participant",authRoutes)
 app.use("/osit-assignments",ositAssignment)
 
 app.listen(port, () => {
