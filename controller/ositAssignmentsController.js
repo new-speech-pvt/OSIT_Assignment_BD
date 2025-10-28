@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 import AssignmentDetail from "../models/assignmentDetail.js";
 import ChildProfile from "../models/childProfile.js";
@@ -6,7 +5,7 @@ import InterventionPlan from "../models/interventionPlan.js";
 import OSITAssignment from "../models/OSIT_Assignment.js";
 import ParticipantInfo from "../models/participantInfo.js";
 
-// ✅ CREATE OSIT ASSIGNMENT (with transaction)
+// CREATE OSIT ASSIGNMENT (with transaction)
 
 const createOSITAssignment = async (req, res) => {
   const session = await mongoose.startSession();
@@ -375,7 +374,7 @@ const updateOSITAssignment = async (req, res) => {
     const { participantInfo, childProfile, assignmentDetail, interventionPlan } = req.body;
 
     const ositAssignment = await OSITAssignment.findById(id);
-    if (!ositAssignment) return res.status(404).json({ message: "Assignment not found" });
+    if (!ositAssignment) return res.status(404).send({ message: "Assignment not found" });
 
     // --- Update Participant Info ---
     if (participantInfo) {
