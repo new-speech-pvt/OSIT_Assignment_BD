@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import mongoose from "mongoose";
 import AssignmentDetail from "../models/assignmentDetail.js";
 import ChildProfile from "../models/childProfile.js";
@@ -8,7 +7,7 @@ import ParticipantInfo from "../models/participantInfo.js";
 import AssessmentScoring from "../models/scoring.js";
 import Therapist from "../models/therapist.js";
 
-// ✅ CREATE OSIT ASSIGNMENT (with transaction)
+// CREATE OSIT ASSIGNMENT (with transaction)
 
 const createOSITAssignment = async (req, res) => {
   const session = await mongoose.startSession();
@@ -411,8 +410,7 @@ const updateOSITAssignment = async (req, res) => {
     } = req.body;
 
     const ositAssignment = await OSITAssignment.findById(id);
-    if (!ositAssignment)
-      return res.status(404).json({ message: "Assignment not found" });
+    if (!ositAssignment) return res.status(404).send({ message: "Assignment not found" });
 
     // --- Update Participant Info ---
     if (participantInfo) {
