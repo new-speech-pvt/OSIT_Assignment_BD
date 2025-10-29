@@ -5,7 +5,6 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import ParticipantInfo from "../models/participantInfo.js";
-import Therapist from "../models/therapist.js";
 
 // Ensure environment variable is set
 // eslint-disable-next-line no-undef
@@ -101,12 +100,14 @@ const registerParticipant = async (req, res) => {
   }
 };
 
-
+/**
+ * Logs in a participant and returns a JWT token.
+ */
 const loginParticipant = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    
+    // Input validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -114,78 +115,44 @@ const loginParticipant = async (req, res) => {
       });
     }
 
-    
-    const therapist = await Therapist.findOne({ email })
-      .select("+password")   
-      .lean();
+    // Find participant by email (include password)
+    const participant = await ParticipantInfo.findOne({ email }).select("+password").lean();
 
-    if (therapist) {
-      
-      const isPasswordValid = await bcrypt.compare(password, therapist.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid email or password.",
-        });
-      }
-
-      
-      const token = generateToken(therapist._id, "THERAPIST");
-
-      
-      const { password: _, ...therapistSafe } = therapist;
-
-      return res.status(200).json({
-        success: true,
-        message: "Therapist login successful.",
-        data: {
-          userId: therapist._id,
-          email: therapist.email,
-          role: "THERAPIST",
-          token,
-          profile: therapistSafe,
-        },
+    if (!participant) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
       });
     }
 
-   
-    const participant = await ParticipantInfo.findOne({ email })
-      .select("+password")
-      .lean();
+    // Compare password
+    const isPasswordValid = await bcrypt.compare(password, participant.password);
 
-    if (participant) {
-      const isPasswordValid = await bcrypt.compare(password, participant.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid email or password.",
-        });
-      }
-
-      const token = generateToken(participant._id, "PARTICIPANT");
-
-      const { password: _, ...participantSafe } = participant;
-
-      return res.status(200).json({
-        success: true,
-        message: "Participant login successful.",
-        data: {
-          userId: participant._id,
-          email: participant.email,
-          role: "PARTICIPANT",
-          token,
-          profile: participantSafe,
-        },
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
       });
     }
 
-    // ───── 3. Neither found → user does not exist ─────
-    return res.status(404).json({
-      success: false,
-      message: "User does not exist.",
+    // Generate JWT
+    const token = generateToken(participant._id);
+
+    // Remove password from response
+    const { password: _, ...participantWithoutPassword } = participant;
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful.",
+      data: {
+        participantId: participant._id,
+        email: participant.email,
+        token,
+      },
     });
   } catch (error) {
     console.error("Login error:", error);
+
     return res.status(500).json({
       success: false,
       message: "An internal server error occurred during login.",
@@ -193,7 +160,5 @@ const loginParticipant = async (req, res) => {
     });
   }
 };
-
-export default login;
 
 export { registerParticipant, loginParticipant };

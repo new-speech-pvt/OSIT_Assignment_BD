@@ -17,7 +17,7 @@ const ositAssignmentSchema = new mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:"InterventionPlan"
     }
-}, {timestamps:true});
+});
 
 const  OSITAssignment = mongoose.model("OSITAssignment", ositAssignmentSchema)
 

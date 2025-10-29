@@ -10,10 +10,4 @@ ositAssignment.get("/:id", getOSITAssignmentById);
 ositAssignment.put("/:id", updateOSITAssignment);
 ositAssignment.delete("/:id", deleteOSITAssignment);
 
-
-
-ositAssignment.get("/", requireTherapist, getAllAssignmentsWithScoring);
-ositAssignment.get("/participant", requireUser, getParticipantAssignments);
-ositAssignment.post("/score", requireTherapist, createOrUpdateScoring);
-
 export default ositAssignment;
