@@ -36,7 +36,7 @@ const participantInfoSchema = new mongoose.Schema({
   enrollmentId: {
     type: String,
   },
-});
+}, {timestamps:true});
 
 const ParticipantInfo = mongoose.model(
   "ParticipantInfo",
