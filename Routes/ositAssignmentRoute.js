@@ -1,11 +1,11 @@
 import express from "express";
-import { createOSITAssignment, deleteOSITAssignment, getAllOSITAssignments, getOSITAssignmentById, updateOSITAssignment } from "../controller/ositAssignmentsController.js";
+import { createOrUpdateScoring, createOSITAssignment, deleteOSITAssignment, getAllAssignmentsWithScoring, getOSITAssignmentById, getParticipantAssignments, updateOSITAssignment } from "../controller/ositAssignmentsController.js";
 import { requireUser } from "../middlewares/requireUser.js";
+import { requireTherapist } from "../middlewares/requireTherapist.js";
 
 const ositAssignment = express.Router();
 
 ositAssignment.post("/",requireUser, createOSITAssignment);
-ositAssignment.get("/", getAllOSITAssignments);
 ositAssignment.get("/:id", getOSITAssignmentById);
 ositAssignment.put("/:id", updateOSITAssignment);
 ositAssignment.delete("/:id", deleteOSITAssignment);

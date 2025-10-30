@@ -11,7 +11,9 @@ import Therapist from "../models/therapist.js";
 // eslint-disable-next-line no-undef
 const JWT_SECRET = process.env.accessTokenKey;
 if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET or accessTokenKey must be defined in environment variables.");
+  throw new Error(
+    "JWT_SECRET or accessTokenKey must be defined in environment variables."
+  );
 }
 
 const JWT_EXPIRES_IN = "30d"; // Token valid for 7 days
@@ -101,12 +103,98 @@ const registerParticipant = async (req, res) => {
   }
 };
 
+const createTherapist = async (req, res) => {
+  try {
+    const { fName, lName, phone, gender, email, password } = req.body;
+    if (!fName || !lName || !phone || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "All fields (fName, lName, phone, email, password) are required.",
+      });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address.",
+      });
+    }
+    if (!/^\d{10}$/.test(phone.toString())) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number must be exactly 10 digits.",
+      });
+    }
+    if (
+      password.length < 8 ||
+      !/[A-Za-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters long and contain at least one letter and one number.",
+      });
+    }
+    const existingTherapist = await Therapist.findOne({
+      $or: [{ email }, { phone }],
+    }).lean();
+    if (existingTherapist) {
+      const field = existingTherapist.email === email ? "Email" : "Phone";
+      return res
+        .status(409)
+        .json({ success: false, message: `${field} is already registered.` });
+    }
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const therapist = await Therapist.create({
+      fName: fName.trim(),
+      lName: lName.trim(),
+      phone,
+      gender: gender?.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role: "THERAPIST",
+    });
+    const token = generateToken(therapist._id, "THERAPIST");
+    return res.status(201).json({
+      success: true,
+      message: "Therapist created successfully.",
+      data: {
+        therapistId: therapist._id,
+        fName: therapist.fName,
+        lName: therapist.lName,
+        email: therapist.email,
+        phone: therapist.phone,
+        gender: therapist.gender,
+        role: therapist.role,
+        token,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating therapist:", error);
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(409).json({
+        success: false,
+        message: `${
+          field.charAt(0).toUpperCase() + field.slice(1)
+        } is already taken.`,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: "An internal server error occurred.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
 
 const loginParticipant = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -114,14 +202,15 @@ const loginParticipant = async (req, res) => {
       });
     }
 
-    
     const therapist = await Therapist.findOne({ email })
-      .select("+password")   
+      .select("+password")
       .lean();
 
     if (therapist) {
-      
-      const isPasswordValid = await bcrypt.compare(password, therapist.password);
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        therapist.password
+      );
       if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
@@ -129,10 +218,8 @@ const loginParticipant = async (req, res) => {
         });
       }
 
-      
       const token = generateToken(therapist._id, "THERAPIST");
 
-      
       const { password: _, ...therapistSafe } = therapist;
 
       return res.status(200).json({
@@ -148,13 +235,15 @@ const loginParticipant = async (req, res) => {
       });
     }
 
-   
     const participant = await ParticipantInfo.findOne({ email })
       .select("+password")
       .lean();
 
     if (participant) {
-      const isPasswordValid = await bcrypt.compare(password, participant.password);
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        participant.password
+      );
       if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
@@ -172,7 +261,7 @@ const loginParticipant = async (req, res) => {
         data: {
           userId: participant._id,
           email: participant.email,
-          role: "PARTICIPANT",
+          role: "USER",
           token,
           profile: participantSafe,
         },
@@ -194,6 +283,4 @@ const loginParticipant = async (req, res) => {
   }
 };
 
-export default login;
-
-export { registerParticipant, loginParticipant };
+export { registerParticipant, loginParticipant, createTherapist };
