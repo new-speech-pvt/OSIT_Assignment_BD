@@ -503,7 +503,7 @@ const deleteOSITAssignment = async (req, res) => {
 
 const getParticipantAssignments = async (req, res) => {
   try {
-    const { email } = req.query;
+    const { email } = req.params;
 
     // ───── Validate input ─────
     if (!email || typeof email !== "string") {
