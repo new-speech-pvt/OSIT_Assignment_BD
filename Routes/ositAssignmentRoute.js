@@ -12,7 +12,7 @@ ositAssignment.delete("/:id", deleteOSITAssignment);
 
 
 
-ositAssignment.get("/", requireTherapist, getAllAssignmentsWithScoring);
+ositAssignment.get("/therapist/assignments", requireTherapist, getAllAssignmentsWithScoring);
 ositAssignment.get("/participant/:email", requireUser, getParticipantAssignments);
 ositAssignment.post("/score", requireTherapist, createOrUpdateScoring);
 
