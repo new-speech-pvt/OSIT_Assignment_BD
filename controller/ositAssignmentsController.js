@@ -12,87 +12,31 @@ import Therapist from "../models/therapist.js";
 const createOSITAssignment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
+ 
   try {
-    // Ensure user is authenticated and req.user is available
     if (!req.user || !req.user._id) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized: User not authenticated.",
       });
     }
-
+ 
     const participantId = req.user._id;
+ 
     const {
-      participantInfo,
       childProfile,
       assignmentDetail,
       interventionPlan,
     } = req.body;
-
-    // --- Update ParticipantInfo (excluding email & password) ---
-    const participantUpdate = {};
-    if (participantInfo) {
-      const {
-        fName,
-        lName,
-        gender,
-        dob,
-        phone,
-        state,
-        city,
-        therapistType,
-        enrollmentId,
-      } = participantInfo;
-
-      if (
-        !fName ||
-        !lName ||
-        !gender ||
-        !dob ||
-        !phone ||
-        !state ||
-        !city ||
-        !therapistType ||
-        !enrollmentId
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "All participant fields are required (fName, lName, gender, dob, phone, state, city, therapistType, enrollmentId).",
-        });
-      }
-
-      Object.assign(participantUpdate, {
-        fName,
-        lName,
-        gender,
-        dob,
-        phone,
-        state,
-        city,
-        therapistType,
-        enrollmentId,
-      });
-    } else {
-      return res.status(400).json({
+ 
+    const participant = await ParticipantInfo.findById(participantId).session(session);
+    if (!participant) {
+      return res.status(404).json({
         success: false,
-        message: "participantInfo object is required.",
+        message: "Participant not found.",
       });
     }
-
-    // Update existing participant (email & password remain unchanged)
-    const updatedParticipant = await ParticipantInfo.findByIdAndUpdate(
-      participantId,
-      { $set: participantUpdate },
-      { new: true, session, runValidators: true }
-    );
-
-    if (!updatedParticipant) {
-      throw new Error("Failed to update participant information.");
-    }
-
-    // --- Validate and Create ChildProfile ---
+ 
     const {
       name: childName,
       dob: childDob,
@@ -101,7 +45,7 @@ const createOSITAssignment = async (req, res) => {
       presentComplaint,
       medicalHistory,
     } = childProfile || {};
-
+ 
     if (
       !childName ||
       !childDob ||
@@ -115,29 +59,23 @@ const createOSITAssignment = async (req, res) => {
         message: "All childProfile fields are required.",
       });
     }
-
-    const createdChild = await ChildProfile.create(
-      [
-        {
-          name: childName,
-          dob: childDob,
-          gender: childGender,
-          diagnosis,
-          presentComplaint,
-          medicalHistory,
-        },
-      ],
-      { session }
-    );
-
-    // --- Validate and Create AssignmentDetail ---
+ 
+const createdChild = await ChildProfile.create([{
+  name: childName,
+  dob: childDob,
+  gender: childGender,
+  diagnosis,
+  presentComplaint,
+  medicalHistory,
+}], { session });
+ 
     const {
       problemStatement,
       identificationAndObjectiveSetting,
       planningAndToolSection,
       toolStrategiesApproaches,
     } = assignmentDetail || {};
-
+ 
     if (
       !problemStatement ||
       !identificationAndObjectiveSetting ||
@@ -149,20 +87,14 @@ const createOSITAssignment = async (req, res) => {
         message: "All assignmentDetail fields are required.",
       });
     }
-
-    const createdAssignment = await AssignmentDetail.create(
-      [
-        {
-          problemStatement,
-          identificationAndObjectiveSetting,
-          planningAndToolSection,
-          toolStrategiesApproaches,
-        },
-      ],
-      { session }
-    );
-
-    // --- Validate and Create InterventionPlan ---
+ 
+const createdAssignment = await AssignmentDetail.create([{
+  problemStatement,
+  identificationAndObjectiveSetting,
+  planningAndToolSection,
+  toolStrategiesApproaches,
+}], { session });
+ 
     const {
       week1,
       week2,
@@ -171,7 +103,7 @@ const createOSITAssignment = async (req, res) => {
       week5,
       mentionToolUsedForRespectiveGoal,
     } = interventionPlan || {};
-
+ 
     if (
       !week1 ||
       !week2 ||
@@ -182,89 +114,66 @@ const createOSITAssignment = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          "All 5 weeks and mentionToolUsedForRespectiveGoal are required in interventionPlan.",
+        message: "All 5 weeks and mentionToolUsedForRespectiveGoal are required.",
       });
     }
-
-    // Helper: Validate week structure
+ 
     const validateWeek = (week) => {
-      if (
-        !week.sessions ||
-        !Array.isArray(week.sessions) ||
-        week.sessions.length === 0
-      )
-        return false;
+      if (!week.sessions || !Array.isArray(week.sessions) || week.sessions.length === 0) return false;
       for (const session of week.sessions) {
-        if (!session.sessionNo || typeof session.sessionNo !== "number")
-          return false;
-        if (!Array.isArray(session.goal) || session.goal.length === 0)
-          return false;
-        if (!Array.isArray(session.activity) || session.activity.length === 0)
-          return false;
+        if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
+        if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
+        if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
       }
       return true;
     };
-
+ 
     if (![week1, week2, week3, week4, week5].every(validateWeek)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid week structure: each week must have sessions with sessionNo, goal[], and activity[].",
+        message: "Invalid week structure: each session must have sessionNo, goal[], and activity[].",
       });
     }
-
-    const createdIntervention = await InterventionPlan.create(
-      [
-        {
-          week1,
-          week2,
-          week3,
-          week4,
-          week5,
-          mentionToolUsedForRespectiveGoal,
-        },
-      ],
-      { session }
-    );
-
-    // --- Create Main OSIT Assignment ---
-    const createdOSIT = await OSITAssignment.create(
-      [
-        {
-          participantInfo: updatedParticipant._id,
-          childProfile: createdChild[0]._id,
-          assignmentDetail: createdAssignment[0]._id,
-          interventionPlan: createdIntervention[0]._id,
-        },
-      ],
-      { session }
-    );
-
+ 
+  const createdIntervention = await InterventionPlan.create([{
+  week1,
+  week2,
+  week3,
+  week4,
+  week5,
+  mentionToolUsedForRespectiveGoal,
+}], { session });
+ 
+const createdOSIT = await OSITAssignment.create([{
+  participantInfo: participant._id,
+  childProfile: createdChild[0]._id,
+  assignmentDetail: createdAssignment[0]._id,
+  interventionPlan: createdIntervention[0]._id,
+}], { session });
+ 
     await session.commitTransaction();
-
+ 
     return res.status(201).json({
       success: true,
       message: "OSIT Assignment created successfully.",
       data: {
-        ositAssignmentId: createdOSIT[0]._id,
-        participantId: updatedParticipant._id,
+        ositAssignmentId: createdOSIT._id,
+        participantId: participant._id,
       },
     });
   } catch (error) {
     await session.abortTransaction();
     console.error("OSIT Assignment creation failed:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to create OSIT Assignment.",
-      // eslint-disable-next-line no-undef
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : error.message,
     });
   } finally {
     session.endSession();
   }
 };
+ 
 
 
 const getAllAssignmentsWithScoring = async (req, res) => {
@@ -513,8 +422,8 @@ const getParticipantAssignments = async (req, res) => {
       });
     }
 
-    // ───── Find participant by email ─────
-    const participant = await ParticipantInfo.findOne({ email }).lean();
+    // ───── Find participant by email ─────  
+    const participant = await ParticipantInfo.findOne({ email:email }).lean();
     if (!participant) {
       return res.status(404).json({
         success: false,
@@ -568,16 +477,16 @@ const getParticipantAssignments = async (req, res) => {
         interventionPlan: assign.interventionPlan,
         scoring: scoring
           ? {
-              criteriaList: scoring.criteriaList,
-              totalObtained: scoring.criteriaList.reduce(
-                (sum, crit) => sum + (crit.obtainedMarks || 0),
-                0
-              ),
-              totalPossible: scoring.criteriaList.reduce(
-                (sum, crit) => sum + crit.maxMarks,
-                0
-              ),
-            }
+            criteriaList: scoring.criteriaList,
+            totalObtained: scoring.criteriaList.reduce(
+              (sum, crit) => sum + (crit.obtainedMarks || 0),
+              0
+            ),
+            totalPossible: scoring.criteriaList.reduce(
+              (sum, crit) => sum + crit.maxMarks,
+              0
+            ),
+          }
           : null,
       };
     });

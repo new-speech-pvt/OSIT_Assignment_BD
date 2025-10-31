@@ -30,19 +30,29 @@ const generateToken = (participantId) => {
 const registerParticipant = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
+ 
   try {
-    const { email, password } = req.body;
-
-    // Input validation
-    if (!email || !password) {
+    const {
+      fName,
+      lName,
+      gender,
+      dob,
+      phone,
+      email,
+      password,
+      state,
+      city,
+      therapistType,
+      enrollmentId,
+    } = req.body;
+ 
+    if (!fName || !lName || !email || !password || !phone) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required.",
+        message: "fName, lName, email, password, and phone are required.",
       });
     }
-
-    // Email format validation
+ 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -50,49 +60,82 @@ const registerParticipant = async (req, res) => {
         message: "Please provide a valid email address.",
       });
     }
-
-    // Check for existing user
-    const existingParticipant = await ParticipantInfo.findOne({ email })
-      .session(session)
-      .exec();
-
-    if (existingParticipant) {
-      return res.status(409).json({
+ 
+    if (!/^\d{10}$/.test(phone.toString())) {
+      return res.status(400).json({
         success: false,
-        message: "An account with this email already exists.",
+        message: "Phone number must be exactly 10 digits.",
       });
     }
-
-    // Hash the password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create new participant
+ 
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters with at least one letter and one number.",
+      });
+    }
+ 
+    const existingParticipant = await ParticipantInfo.findOne({
+      $or: [{ email }, { phone }],
+    })
+      .session(session)
+      .lean();
+ 
+    if (existingParticipant) {
+      const field = existingParticipant.email === email ? "Email" : "Phone";
+      return res.status(409).json({
+        success: false,
+        message: `${field} is already registered.`,
+      });
+    }
+ 
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
+ 
     const newParticipant = new ParticipantInfo({
-      email,
+      fName: fName.trim(),
+      lName: lName.trim(),
+      gender: gender?.trim(),
+      dob: dob ? new Date(dob) : undefined,
+      phone,
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
+      state: state?.trim(),
+      city: city?.trim(),
+      therapistType: therapistType?.trim(),
+      enrollmentId: enrollmentId?.trim(),
     });
-
+ 
     await newParticipant.save({ session });
-
-    // Generate JWT
-    const token = generateToken(newParticipant._id);
-
+ 
+    const token = generateToken(newParticipant._id, "PARTICIPANT");
+ 
     await session.commitTransaction();
-
+ 
     return res.status(201).json({
       success: true,
-      message: "Account created successfully.",
+      message: "Participant registered successfully.",
       data: {
         participantId: newParticipant._id,
+        fName: newParticipant.fName,
+        lName: newParticipant.lName,
         email: newParticipant.email,
+        phone: newParticipant.phone,
         token,
       },
     });
   } catch (error) {
     await session.abortTransaction();
     console.error("Registration error:", error);
-
+ 
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(409).json({
+        success: false,
+        message: `${field.charAt(0).toUpperCase() + field.slice(1)} is already taken.`,
+      });
+    }
+ 
     return res.status(500).json({
       success: false,
       message: "An internal server error occurred during registration.",
