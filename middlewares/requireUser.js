@@ -25,7 +25,7 @@ export const requireUser = async (req, res, next) => {
         next();
     } catch (e) {
         // return res.status(401).send('Invalid access key');
-        res.status(200).json({message:"Invalid access key"});
+        res.status(401).json({message:"Invalid access key"});
     }
 };
 
