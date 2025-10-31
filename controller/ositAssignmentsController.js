@@ -266,7 +266,6 @@ const createOSITAssignment = async (req, res) => {
   }
 };
 
-
 const getAllAssignmentsWithScoring = async (req, res) => {
   try {
     const { status = "all" } = req.query;
@@ -306,7 +305,9 @@ const getAllAssignmentsWithScoring = async (req, res) => {
 
     // 4. Filter based on status
     if (status === "scored") {
-      pipeline.push({ $match: { "scoring.OSITAssignment_Id": { $exists: true } } });
+      pipeline.push({
+        $match: { "scoring.OSITAssignment_Id": { $exists: true } },
+      });
     } else if (status === "unscored") {
       pipeline.push({ $match: { scoring: null } });
     }
@@ -349,7 +350,11 @@ const getAllAssignmentsWithScoring = async (req, res) => {
 
     // Populate in parallel (post-aggregation)
     const populatedAssignments = await OSITAssignment.populate(assignments, [
-      { path: "participantInfo", select: "fName lName email _id" },
+      {
+        path: "participantInfo",
+        select:
+          "fName lName email _id gender phone state city therapistType enrollmentId",
+      },
       { path: "childProfile", select: "name age gender" },
       { path: "assignmentDetail", select: "title description" },
       { path: "interventionPlan", select: "planName duration" },
@@ -376,27 +381,88 @@ const getAllAssignmentsWithScoring = async (req, res) => {
   }
 };
 
-
 // ✅ GET SINGLE ASSIGNMENT BY ID
 const getOSITAssignmentById = async (req, res) => {
   try {
     const { id } = req.params;
+ 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid assignment ID",
+      });
+    }
+ 
     const assignment = await OSITAssignment.findById(id)
-      .populate("participantInfo")
-      .populate("childProfile")
-      .populate("assignmentDetail")
-      .populate("interventionPlan");
-
-    if (!assignment)
-      return res.status(404).json({ message: "Assignment not found" });
-
-    return res.status(200).json(assignment);
+      .populate("participantInfo", "fName lName email phone")
+      .populate("childProfile", "name dob gender diagnosis presentComplaint medicalHistory")
+      .populate("assignmentDetail", "problemStatement identificationAndObjectiveSetting planningAndToolSection toolStrategiesApproaches")
+      .populate("interventionPlan", "week1 week2 week3 week4 week5 mentionToolUsedForRespectiveGoal");
+ 
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: "Assignment not found",
+      });
+    }
+ 
+    const scoring = await AssessmentScoring.findOne({ OSITAssignment_Id: assignment._id })
+      .populate("therapist", "fName lName email")
+      .lean();
+ 
+    let scoringData = null;
+    if (scoring) {
+      const totalObtained = scoring.criteriaList.reduce((sum, item) => sum + (item.obtainedMarks || 0), 0);
+      const totalPossible = scoring.criteriaList.reduce((sum, item) => sum + item.maxMarks, 0);
+ 
+      scoringData = {
+        scoringId: scoring._id.toString(),
+        OSITAssignment_Id: scoring.OSITAssignment_Id.toString(),
+        therapist: {
+          id: scoring.therapist._id.toString(),
+          name: `${scoring.therapist.fName} ${scoring.therapist.lName}`,
+          email: scoring.therapist.email,
+        },
+        criteriaList: scoring.criteriaList.map(c => ({
+          criteria: c.criteria,
+          maxMarks: c.maxMarks,
+          obtainedMarks: c.obtainedMarks,
+          remarks: c.remarks || "",
+          _id: c._id.toString(),
+        })),
+        totalObtained,
+        totalPossible,
+        createdAt: scoring.createdAt,
+        updatedAt: scoring.updatedAt,
+      };
+    }
+ 
+    return res.status(200).json({
+      success: true,
+      data: {
+        assignment: {
+          _id: assignment._id,
+          participantInfo: assignment.participantInfo,
+          childProfile: assignment.childProfile,
+          assignmentDetail: assignment.assignmentDetail,
+          interventionPlan: assignment.interventionPlan,
+          createdAt: assignment.createdAt,
+          updatedAt: assignment.updatedAt,
+        },
+        scoring: scoringData,
+      },
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching assignment", error: error.message });
+    console.error("Error fetching assignment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching assignment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
+ 
+ 
 
 // ✅ UPDATE ASSIGNMENT
 const updateOSITAssignment = async (req, res) => {
@@ -410,7 +476,8 @@ const updateOSITAssignment = async (req, res) => {
     } = req.body;
 
     const ositAssignment = await OSITAssignment.findById(id);
-    if (!ositAssignment) return res.status(404).send({ message: "Assignment not found" });
+    if (!ositAssignment)
+      return res.status(404).send({ message: "Assignment not found" });
 
     // --- Update Participant Info ---
     if (participantInfo) {
@@ -611,7 +678,7 @@ const createOrUpdateScoring = async (req, res) => {
   try {
     const { OSITAssignment_Id, criteriaList } = req.body;
     const therapistId = req.user?.id; // from JWT middleware
-
+ 
     // ───── 1. Input validation ─────
     if (
       !OSITAssignment_Id ||
@@ -625,14 +692,14 @@ const createOrUpdateScoring = async (req, res) => {
           "OSITAssignment_Id and non-empty criteriaList array are required.",
       });
     }
-
+ 
     if (!therapistId) {
       return res.status(401).json({
         success: false,
         message: "Therapist authentication required.",
       });
     }
-
+ 
     // Validate ObjectId format
     if (
       !mongoose.Types.ObjectId.isValid(OSITAssignment_Id) ||
@@ -643,7 +710,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "Invalid ID format.",
       });
     }
-
+ 
     // ───── 2. Validate Assignment exists ─────
     const assignment = await OSITAssignment.findById(OSITAssignment_Id).lean();
     if (!assignment) {
@@ -652,7 +719,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "OSITAssignment not found.",
       });
     }
-
+ 
     // ───── 3. Validate Therapist exists ─────
     const therapist = await Therapist.findById(therapistId).lean();
     if (!therapist) {
@@ -661,7 +728,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "Therapist not found.",
       });
     }
-
+ 
     // ───── 4. Validate criteriaList fields ─────
     for (const item of criteriaList) {
       if (!item.criteria || typeof item.criteria !== "string") {
@@ -685,10 +752,10 @@ const createOrUpdateScoring = async (req, res) => {
       }
       item.obtainedMarks = obtained;
     }
-
+ 
     // ───── 5. Check if scoring already exists (Update) else Create ─────
     let scoring = await AssessmentScoring.findOne({ OSITAssignment_Id }).exec();
-
+ 
     if (scoring) {
       // Update existing
       scoring.criteriaList = criteriaList;
@@ -702,16 +769,16 @@ const createOrUpdateScoring = async (req, res) => {
         therapist: therapistId,
       });
     }
-
+ 
     await scoring.save();
-
+ 
     // ───── 6. Compute totals for response ─────
     const totalObtained = criteriaList.reduce(
       (sum, c) => sum + (c.obtainedMarks || 0),
       0
     );
     const totalPossible = criteriaList.reduce((sum, c) => sum + c.maxMarks, 0);
-
+ 
     // ───── 7. Success Response ─────
     return res.status(scoring.isNew ? 201 : 200).json({
       success: true,
@@ -743,7 +810,7 @@ const createOrUpdateScoring = async (req, res) => {
     });
   }
 };
-
+ 
 export {
   createOSITAssignment,
   getAllAssignmentsWithScoring,
