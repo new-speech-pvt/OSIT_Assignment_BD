@@ -178,8 +178,7 @@ const createdOSIT = await OSITAssignment.create([{
 const getAllAssignmentsWithScoring = async (req, res) => {
   try {
     const { status = "all" } = req.query;
-
-    // Validate filter
+ 
     const validFilters = ["all", "scored", "unscored"];
     if (!validFilters.includes(status)) {
       return res.status(400).json({
@@ -187,45 +186,54 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         message: "Invalid status filter. Use: all, scored, or unscored.",
       });
     }
-
-    // Build aggregation pipeline
-    const pipeline = [];
-
-    // 1. Sort by latest first
-    pipeline.push({ $sort: { createdAt: -1 } });
-
-    // 2. Lookup scoring (left join)
-    pipeline.push({
-      $lookup: {
-        from: "assessmentscorings", // MongoDB collection name (lowercase + plural)
-        localField: "_id",
-        foreignField: "OSITAssignment_Id",
-        as: "scoring",
+ 
+    const pipeline = [
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "assessmentscorings",
+          localField: "_id",
+          foreignField: "OSITAssignment_Id",
+          as: "scoring",
+        },
       },
-    });
-
-    // 3. Unwind scoring (optional, keep assignment even if no scoring)
-    pipeline.push({
-      $unwind: {
-        path: "$scoring",
-        preserveNullAndEmptyArrays: true, // keeps assignments without scoring
+      {
+        $unwind: {
+          path: "$scoring",
+          preserveNullAndEmptyArrays: true,
+        },
       },
-    });
-
-    // 4. Filter based on status
+    ];
+ 
     if (status === "scored") {
-      pipeline.push({
-        $match: { "scoring.OSITAssignment_Id": { $exists: true } },
-      });
+      pipeline.push({ $match: { "scoring._id": { $exists: true } } });
     } else if (status === "unscored") {
       pipeline.push({ $match: { scoring: null } });
     }
-    // "all" → no filter needed
-
-    // 5. Project final shape + compute totals
+ 
+    pipeline.push({
+      $addFields: {
+        hasScoring: { $ifNull: ["$scoring", false] },
+        totalObtained: {
+          $cond: [
+            { $ne: ["$scoring", null] },
+            { $sum: "$scoring.criteriaList.obtainedMarks" },
+            null,
+          ],
+        },
+        totalPossible: {
+          $cond: [
+            { $ne: ["$scoring", null] },
+            { $sum: "$scoring.criteriaList.maxMarks" },
+            null,
+          ],
+        },
+      },
+    });
+ 
     pipeline.push({
       $project: {
-        assignmentId: "$_id",
+        _id: 1,
         participantInfo: 1,
         childProfile: 1,
         assignmentDetail: 1,
@@ -233,44 +241,30 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         createdAt: 1,
         updatedAt: 1,
         scoring: {
-          $cond: {
-            if: { $ifNull: ["$scoring", false] },
-            then: {
-              scoringId: "$scoring._id",
-              therapist: "$scoring.therapist",
-              criteriaList: "$scoring.criteriaList",
-              totalObtained: {
-                $sum: "$scoring.criteriaList.obtainedMarks",
-              },
-              totalPossible: {
-                $sum: "$scoring.criteriaList.maxMarks",
-              },
-              scoredAt: "$scoring.createdAt",
+          $cond: [
+            "$hasScoring",
+            {
+              totalObtained: "$totalObtained",
+              totalPossible: "$totalPossible",
             },
-            else: null,
-          },
+            null,
+          ],
         },
-        hasScoring: { $ifNull: ["$scoring", false] },
       },
     });
-
-    // 6. Populate referenced fields (after aggregation)
+ 
     const assignments = await OSITAssignment.aggregate(pipeline);
-
-    // Populate in parallel (post-aggregation)
+ 
     const populatedAssignments = await OSITAssignment.populate(assignments, [
       {
         path: "participantInfo",
-        select:
-          "fName lName email _id gender phone state city therapistType enrollmentId",
+        select: "fName lName email phone state city therapistType enrollmentId",
       },
-      { path: "childProfile", select: "name age gender" },
-      { path: "assignmentDetail", select: "title description" },
-      { path: "interventionPlan", select: "planName duration" },
-      { path: "scoring.therapist", select: "fName lName email" },
+      { path: "childProfile", select: "name dob gender diagnosis" },
+      { path: "assignmentDetail", select: "problemStatement identificationAndObjectiveSetting" },
+      { path: "interventionPlan", select: "mentionToolUsedForRespectiveGoal" },
     ]);
-
-    // 7. Final response
+ 
     return res.status(200).json({
       success: true,
       message: "Assignments retrieved successfully.",
