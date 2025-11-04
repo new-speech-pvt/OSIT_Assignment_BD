@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 
 const ositAssignmentSchema = new mongoose.Schema({
+    
+    event:{
+      type:mongoose.Schema.Types.ObjectId,
+      ref:"event"
+    },
+
     participantInfo:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"ParticipantInfo"
