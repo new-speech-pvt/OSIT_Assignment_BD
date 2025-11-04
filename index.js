@@ -5,6 +5,7 @@ import cors from "cors";
 import ositAssignment from "./Routes/ositAssignmentRoute.js";
 import { authRoutes } from "./Routes/auth.js";
 import { therapistRoutes } from "./Routes/therapistRoute.js";
+import { eventRouter } from "./Routes/event.js";
 
 const app = express();
 const port = 3001;
@@ -28,6 +29,8 @@ app.get("/", (req, res) => {
 app.use("/participant", authRoutes);
 app.use("/osit-assignments", ositAssignment);
 app.use("/therapist", therapistRoutes);
+
+app.use("/event", eventRouter);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
