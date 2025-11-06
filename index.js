@@ -13,7 +13,7 @@ const port = 3001;
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://osit-assignment-fd.onrender.com"],
+    origin: ["http://localhost:5173", "https://osit-assignment-fd.onrender.com", "https://osit.speechgears.com"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -30,7 +30,7 @@ app.use("/participant", authRoutes);
 app.use("/osit-assignments", ositAssignment);
 app.use("/therapist", therapistRoutes);
 
-app.use("/event", eventRouter);
+app.use("/events", eventRouter);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
