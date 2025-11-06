@@ -24,10 +24,12 @@ const createOSITAssignment = async (req, res) => {
     const participantId = req.user._id;
  
     const {
+      event,
       childProfile,
       assignmentDetail,
       interventionPlan,
     } = req.body;
+    console.log("chiled ",event)
  
     const participant = await ParticipantInfo.findById(participantId).session(session);
     if (!participant) {
@@ -44,6 +46,7 @@ const createOSITAssignment = async (req, res) => {
       diagnosis,
       presentComplaint,
       medicalHistory,
+     
     } = childProfile || {};
  
     if (
@@ -145,10 +148,12 @@ const createdAssignment = await AssignmentDetail.create([{
 }], { session });
  
 const createdOSIT = await OSITAssignment.create([{
+   event:event,
   participantInfo: participant._id,
   childProfile: createdChild[0]._id,
   assignmentDetail: createdAssignment[0]._id,
   interventionPlan: createdIntervention[0]._id,
+ 
 }], { session });
  
     await session.commitTransaction();
@@ -297,6 +302,7 @@ const getOSITAssignmentById = async (req, res) => {
     }
  
     const assignment = await OSITAssignment.findById(id)
+    .populate("event")
       .populate("participantInfo", "fName lName email phone")
       .populate("childProfile", "name dob gender diagnosis presentComplaint medicalHistory")
       .populate("assignmentDetail", "problemStatement identificationAndObjectiveSetting planningAndToolSection toolStrategiesApproaches")
@@ -345,6 +351,7 @@ const getOSITAssignmentById = async (req, res) => {
       data: {
         assignment: {
           _id: assignment._id,
+          event:assignment.event,
           participantInfo: assignment.participantInfo,
           childProfile: assignment.childProfile,
           assignmentDetail: assignment.assignmentDetail,
@@ -496,6 +503,7 @@ const getParticipantAssignments = async (req, res) => {
     const assignments = await OSITAssignment.find({
       participantInfo: participant._id,
     })
+    .populate("event")
       .populate("childProfile", "name age") // optional: populate useful fields
       .populate("assignmentDetail", "title description")
       .populate("interventionPlan", "planName")
