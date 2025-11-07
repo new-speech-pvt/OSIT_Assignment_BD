@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import mongoose from "mongoose";
 import AssignmentDetail from "../models/assignmentDetail.js";
 import ChildProfile from "../models/childProfile.js";
@@ -12,7 +13,7 @@ import Therapist from "../models/therapist.js";
 const createOSITAssignment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
- 
+
   try {
     if (!req.user || !req.user._id) {
       return res.status(401).json({
@@ -20,37 +21,38 @@ const createOSITAssignment = async (req, res) => {
         message: "Unauthorized: User not authenticated.",
       });
     }
- 
+
     const participantId = req.user._id;
- 
-    const {
-      event,
-      childProfile,
-      assignmentDetail,
-      interventionPlan,
-    } = req.body;
-    console.log("chiled ",event)
- 
-    const participant = await ParticipantInfo.findById(participantId).session(session);
+
+    const { event, childProfile, assignmentDetail, interventionPlan } =
+      req.body;
+    console.log("child ", event);
+
+    const participant = await ParticipantInfo.findById(participantId).session(
+      session
+    );
     if (!participant) {
       return res.status(404).json({
         success: false,
         message: "Participant not found.",
       });
     }
- 
+
     const {
-      name: childName,
+      fname: childFname,
+      mname: childMname,
+      lname: childLname,
       dob: childDob,
       gender: childGender,
       diagnosis,
       presentComplaint,
       medicalHistory,
-     
     } = childProfile || {};
- 
+
     if (
-      !childName ||
+      !childFname ||
+      !childMname ||
+      !childLname ||
       !childDob ||
       !childGender ||
       !diagnosis ||
@@ -62,23 +64,30 @@ const createOSITAssignment = async (req, res) => {
         message: "All childProfile fields are required.",
       });
     }
- 
-const createdChild = await ChildProfile.create([{
-  name: childName,
-  dob: childDob,
-  gender: childGender,
-  diagnosis,
-  presentComplaint,
-  medicalHistory,
-}], { session });
- 
+
+    const createdChild = await ChildProfile.create(
+      [
+        {
+          fname: childFname,
+          mname: childMname,
+          lname: childLname,
+          dob: childDob,
+          gender: childGender,
+          diagnosis,
+          presentComplaint,
+          medicalHistory,
+        },
+      ],
+      { session }
+    );
+
     const {
       problemStatement,
       identificationAndObjectiveSetting,
       planningAndToolSection,
       toolStrategiesApproaches,
     } = assignmentDetail || {};
- 
+
     if (
       !problemStatement ||
       !identificationAndObjectiveSetting ||
@@ -90,14 +99,19 @@ const createdChild = await ChildProfile.create([{
         message: "All assignmentDetail fields are required.",
       });
     }
- 
-const createdAssignment = await AssignmentDetail.create([{
-  problemStatement,
-  identificationAndObjectiveSetting,
-  planningAndToolSection,
-  toolStrategiesApproaches,
-}], { session });
- 
+
+    const createdAssignment = await AssignmentDetail.create(
+      [
+        {
+          problemStatement,
+          identificationAndObjectiveSetting,
+          planningAndToolSection,
+          toolStrategiesApproaches,
+        },
+      ],
+      { session }
+    );
+
     const {
       week1,
       week2,
@@ -106,7 +120,7 @@ const createdAssignment = await AssignmentDetail.create([{
       week5,
       mentionToolUsedForRespectiveGoal,
     } = interventionPlan || {};
- 
+
     if (
       !week1 ||
       !week2 ||
@@ -117,47 +131,68 @@ const createdAssignment = await AssignmentDetail.create([{
     ) {
       return res.status(400).json({
         success: false,
-        message: "All 5 weeks and mentionToolUsedForRespectiveGoal are required.",
+        message:
+          "All 5 weeks and mentionToolUsedForRespectiveGoal are required.",
       });
     }
- 
+
     const validateWeek = (week) => {
-      if (!week.sessions || !Array.isArray(week.sessions) || week.sessions.length === 0) return false;
+      if (
+        !week.sessions ||
+        !Array.isArray(week.sessions) ||
+        week.sessions.length === 0
+      )
+        return false;
       for (const session of week.sessions) {
-        if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
-        if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
-        if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
+        if (!session.sessionNo || typeof session.sessionNo !== "number")
+          return false;
+        if (!Array.isArray(session.goal) || session.goal.length === 0)
+          return false;
+        if (!Array.isArray(session.activity) || session.activity.length === 0)
+          return false;
+        if (!Array.isArray(session.tool) || session.activity.length === 0)
+          return false;
       }
       return true;
     };
- 
+
     if (![week1, week2, week3, week4, week5].every(validateWeek)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid week structure: each session must have sessionNo, goal[], and activity[].",
+        message:
+          "Invalid week structure: each session must have sessionNo, goal[], and activity[].",
       });
     }
- 
-  const createdIntervention = await InterventionPlan.create([{
-  week1,
-  week2,
-  week3,
-  week4,
-  week5,
-  mentionToolUsedForRespectiveGoal,
-}], { session });
- 
-const createdOSIT = await OSITAssignment.create([{
-   event:event,
-  participantInfo: participant._id,
-  childProfile: createdChild[0]._id,
-  assignmentDetail: createdAssignment[0]._id,
-  interventionPlan: createdIntervention[0]._id,
- 
-}], { session });
- 
+
+    const createdIntervention = await InterventionPlan.create(
+      [
+        {
+          week1,
+          week2,
+          week3,
+          week4,
+          week5,
+          mentionToolUsedForRespectiveGoal,
+        },
+      ],
+      { session }
+    );
+
+    const createdOSIT = await OSITAssignment.create(
+      [
+        {
+          event: event,
+          participantInfo: participant._id,
+          childProfile: createdChild[0]._id,
+          assignmentDetail: createdAssignment[0]._id,
+          interventionPlan: createdIntervention[0]._id,
+        },
+      ],
+      { session }
+    );
+
     await session.commitTransaction();
- 
+
     return res.status(201).json({
       success: true,
       message: "OSIT Assignment created successfully.",
@@ -172,18 +207,18 @@ const createdOSIT = await OSITAssignment.create([{
     return res.status(500).json({
       success: false,
       message: "Failed to create OSIT Assignment.",
-      error: process.env.NODE_ENV === "development" ? error.message : error.message,
+      error:
+        process.env.NODE_ENV === "development" ? error.message : error.message,
     });
   } finally {
     session.endSession();
   }
 };
- 
 
 const getAllAssignmentsWithScoring = async (req, res) => {
   try {
     const { status = "all" } = req.query;
- 
+
     const validFilters = ["all", "scored", "unscored"];
     if (!validFilters.includes(status)) {
       return res.status(400).json({
@@ -191,7 +226,7 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         message: "Invalid status filter. Use: all, scored, or unscored.",
       });
     }
- 
+
     const pipeline = [
       { $sort: { createdAt: -1 } },
       {
@@ -209,13 +244,13 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         },
       },
     ];
- 
+
     if (status === "scored") {
       pipeline.push({ $match: { "scoring._id": { $exists: true } } });
     } else if (status === "unscored") {
       pipeline.push({ $match: { scoring: null } });
     }
- 
+
     pipeline.push({
       $addFields: {
         hasScoring: { $ifNull: ["$scoring", false] },
@@ -235,7 +270,7 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         },
       },
     });
- 
+
     pipeline.push({
       $project: {
         _id: 1,
@@ -257,19 +292,22 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         },
       },
     });
- 
+
     const assignments = await OSITAssignment.aggregate(pipeline);
- 
+
     const populatedAssignments = await OSITAssignment.populate(assignments, [
       {
         path: "participantInfo",
         select: "fName lName email phone state city therapistType enrollmentId",
       },
       { path: "childProfile", select: "name dob gender diagnosis" },
-      { path: "assignmentDetail", select: "problemStatement identificationAndObjectiveSetting" },
+      {
+        path: "assignmentDetail",
+        select: "problemStatement identificationAndObjectiveSetting",
+      },
       { path: "interventionPlan", select: "mentionToolUsedForRespectiveGoal" },
     ]);
- 
+
     return res.status(200).json({
       success: true,
       message: "Assignments retrieved successfully.",
@@ -293,37 +331,54 @@ const getAllAssignmentsWithScoring = async (req, res) => {
 const getOSITAssignmentById = async (req, res) => {
   try {
     const { id } = req.params;
- 
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid assignment ID",
       });
     }
- 
+
     const assignment = await OSITAssignment.findById(id)
-    .populate("event")
+      .populate("event")
       .populate("participantInfo", "fName lName email phone")
-      .populate("childProfile", "name dob gender diagnosis presentComplaint medicalHistory")
-      .populate("assignmentDetail", "problemStatement identificationAndObjectiveSetting planningAndToolSection toolStrategiesApproaches")
-      .populate("interventionPlan", "week1 week2 week3 week4 week5 mentionToolUsedForRespectiveGoal");
- 
+      .populate(
+        "childProfile",
+        "name dob gender diagnosis presentComplaint medicalHistory"
+      )
+      .populate(
+        "assignmentDetail",
+        "problemStatement identificationAndObjectiveSetting planningAndToolSection toolStrategiesApproaches"
+      )
+      .populate(
+        "interventionPlan",
+        "week1 week2 week3 week4 week5 mentionToolUsedForRespectiveGoal"
+      );
+
     if (!assignment) {
       return res.status(404).json({
         success: false,
         message: "Assignment not found",
       });
     }
- 
-    const scoring = await AssessmentScoring.findOne({ OSITAssignment_Id: assignment._id })
+
+    const scoring = await AssessmentScoring.findOne({
+      OSITAssignment_Id: assignment._id,
+    })
       .populate("therapist", "fName lName email")
       .lean();
- 
+
     let scoringData = null;
     if (scoring) {
-      const totalObtained = scoring.criteriaList.reduce((sum, item) => sum + (item.obtainedMarks || 0), 0);
-      const totalPossible = scoring.criteriaList.reduce((sum, item) => sum + item.maxMarks, 0);
- 
+      const totalObtained = scoring.criteriaList.reduce(
+        (sum, item) => sum + (item.obtainedMarks || 0),
+        0
+      );
+      const totalPossible = scoring.criteriaList.reduce(
+        (sum, item) => sum + item.maxMarks,
+        0
+      );
+
       scoringData = {
         scoringId: scoring._id.toString(),
         OSITAssignment_Id: scoring.OSITAssignment_Id.toString(),
@@ -332,7 +387,7 @@ const getOSITAssignmentById = async (req, res) => {
           name: `${scoring.therapist.fName} ${scoring.therapist.lName}`,
           email: scoring.therapist.email,
         },
-        criteriaList: scoring.criteriaList.map(c => ({
+        criteriaList: scoring.criteriaList.map((c) => ({
           criteria: c.criteria,
           maxMarks: c.maxMarks,
           obtainedMarks: c.obtainedMarks,
@@ -345,13 +400,13 @@ const getOSITAssignmentById = async (req, res) => {
         updatedAt: scoring.updatedAt,
       };
     }
- 
+
     return res.status(200).json({
       success: true,
       data: {
         assignment: {
           _id: assignment._id,
-          event:assignment.event,
+          event: assignment.event,
           participantInfo: assignment.participantInfo,
           childProfile: assignment.childProfile,
           assignmentDetail: assignment.assignmentDetail,
@@ -371,8 +426,6 @@ const getOSITAssignmentById = async (req, res) => {
     });
   }
 };
- 
- 
 
 // ✅ UPDATE ASSIGNMENT
 const updateOSITAssignment = async (req, res) => {
@@ -490,8 +543,8 @@ const getParticipantAssignments = async (req, res) => {
       });
     }
 
-    // ───── Find participant by email ─────  
-    const participant = await ParticipantInfo.findOne({ email:email }).lean();
+    // ───── Find participant by email ─────
+    const participant = await ParticipantInfo.findOne({ email: email }).lean();
     if (!participant) {
       return res.status(404).json({
         success: false,
@@ -503,7 +556,7 @@ const getParticipantAssignments = async (req, res) => {
     const assignments = await OSITAssignment.find({
       participantInfo: participant._id,
     })
-    .populate("event")
+      .populate("event")
       .populate("childProfile", "name age") // optional: populate useful fields
       .populate("assignmentDetail", "title description")
       .populate("interventionPlan", "planName")
@@ -546,16 +599,16 @@ const getParticipantAssignments = async (req, res) => {
         interventionPlan: assign.interventionPlan,
         scoring: scoring
           ? {
-            criteriaList: scoring.criteriaList,
-            totalObtained: scoring.criteriaList.reduce(
-              (sum, crit) => sum + (crit.obtainedMarks || 0),
-              0
-            ),
-            totalPossible: scoring.criteriaList.reduce(
-              (sum, crit) => sum + crit.maxMarks,
-              0
-            ),
-          }
+              criteriaList: scoring.criteriaList,
+              totalObtained: scoring.criteriaList.reduce(
+                (sum, crit) => sum + (crit.obtainedMarks || 0),
+                0
+              ),
+              totalPossible: scoring.criteriaList.reduce(
+                (sum, crit) => sum + crit.maxMarks,
+                0
+              ),
+            }
           : null,
       };
     });
@@ -589,7 +642,7 @@ const createOrUpdateScoring = async (req, res) => {
   try {
     const { OSITAssignment_Id, criteriaList } = req.body;
     const therapistId = req.user?.id; // from JWT middleware
- 
+
     // ───── 1. Input validation ─────
     if (
       !OSITAssignment_Id ||
@@ -603,14 +656,14 @@ const createOrUpdateScoring = async (req, res) => {
           "OSITAssignment_Id and non-empty criteriaList array are required.",
       });
     }
- 
+
     if (!therapistId) {
       return res.status(401).json({
         success: false,
         message: "Therapist authentication required.",
       });
     }
- 
+
     // Validate ObjectId format
     if (
       !mongoose.Types.ObjectId.isValid(OSITAssignment_Id) ||
@@ -621,7 +674,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "Invalid ID format.",
       });
     }
- 
+
     // ───── 2. Validate Assignment exists ─────
     const assignment = await OSITAssignment.findById(OSITAssignment_Id).lean();
     if (!assignment) {
@@ -630,7 +683,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "OSITAssignment not found.",
       });
     }
- 
+
     // ───── 3. Validate Therapist exists ─────
     const therapist = await Therapist.findById(therapistId).lean();
     if (!therapist) {
@@ -639,7 +692,7 @@ const createOrUpdateScoring = async (req, res) => {
         message: "Therapist not found.",
       });
     }
- 
+
     // ───── 4. Validate criteriaList fields ─────
     for (const item of criteriaList) {
       if (!item.criteria || typeof item.criteria !== "string") {
@@ -663,10 +716,10 @@ const createOrUpdateScoring = async (req, res) => {
       }
       item.obtainedMarks = obtained;
     }
- 
+
     // ───── 5. Check if scoring already exists (Update) else Create ─────
     let scoring = await AssessmentScoring.findOne({ OSITAssignment_Id }).exec();
- 
+
     if (scoring) {
       // Update existing
       scoring.criteriaList = criteriaList;
@@ -680,16 +733,16 @@ const createOrUpdateScoring = async (req, res) => {
         therapist: therapistId,
       });
     }
- 
+
     await scoring.save();
- 
+
     // ───── 6. Compute totals for response ─────
     const totalObtained = criteriaList.reduce(
       (sum, c) => sum + (c.obtainedMarks || 0),
       0
     );
     const totalPossible = criteriaList.reduce((sum, c) => sum + c.maxMarks, 0);
- 
+
     // ───── 7. Success Response ─────
     return res.status(scoring.isNew ? 201 : 200).json({
       success: true,
@@ -721,7 +774,7 @@ const createOrUpdateScoring = async (req, res) => {
     });
   }
 };
- 
+
 export {
   createOSITAssignment,
   getAllAssignmentsWithScoring,
