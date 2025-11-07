@@ -118,7 +118,6 @@ const createOSITAssignment = async (req, res) => {
       week3,
       week4,
       week5,
-      mentionToolUsedForRespectiveGoal,
     } = interventionPlan || {};
 
     if (
@@ -126,8 +125,7 @@ const createOSITAssignment = async (req, res) => {
       !week2 ||
       !week3 ||
       !week4 ||
-      !week5 ||
-      !mentionToolUsedForRespectiveGoal
+      !week5
     ) {
       return res.status(400).json({
         success: false,
@@ -144,14 +142,10 @@ const createOSITAssignment = async (req, res) => {
       )
         return false;
       for (const session of week.sessions) {
-        if (!session.sessionNo || typeof session.sessionNo !== "number")
-          return false;
-        if (!Array.isArray(session.goal) || session.goal.length === 0)
-          return false;
-        if (!Array.isArray(session.activity) || session.activity.length === 0)
-          return false;
-        if (!Array.isArray(session.tool) || session.activity.length === 0)
-          return false;
+        if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
+        if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
+        if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
+        
       }
       return true;
     };
@@ -163,34 +157,24 @@ const createOSITAssignment = async (req, res) => {
           "Invalid week structure: each session must have sessionNo, goal[], and activity[].",
       });
     }
-
-    const createdIntervention = await InterventionPlan.create(
-      [
-        {
-          week1,
-          week2,
-          week3,
-          week4,
-          week5,
-          mentionToolUsedForRespectiveGoal,
-        },
-      ],
-      { session }
-    );
-
-    const createdOSIT = await OSITAssignment.create(
-      [
-        {
-          event: event,
-          participantInfo: participant._id,
-          childProfile: createdChild[0]._id,
-          assignmentDetail: createdAssignment[0]._id,
-          interventionPlan: createdIntervention[0]._id,
-        },
-      ],
-      { session }
-    );
-
+ 
+  const createdIntervention = await InterventionPlan.create([{
+  week1,
+  week2,
+  week3,
+  week4,
+  week5,
+}], { session });
+ 
+const createdOSIT = await OSITAssignment.create([{
+   event:event,
+  participantInfo: participant._id,
+  childProfile: createdChild[0]._id,
+  assignmentDetail: createdAssignment[0]._id,
+  interventionPlan: createdIntervention[0]._id,
+ 
+}], { session });
+ 
     await session.commitTransaction();
 
     return res.status(201).json({
