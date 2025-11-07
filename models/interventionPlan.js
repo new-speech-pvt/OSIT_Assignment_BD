@@ -19,6 +19,10 @@ const interventionPlanSchema = mongoose.Schema({
                 required: true
 
             }],
+            tool: {
+                type: String,
+                required: true
+            },
             childResponse: String,
             date: Date,
         }]
@@ -41,6 +45,10 @@ const interventionPlanSchema = mongoose.Schema({
                 required: true
 
             }],
+             tool: {
+                type: String,
+                required: true
+            },
             childResponse: String,
             date: Date,
         }]
@@ -63,6 +71,10 @@ const interventionPlanSchema = mongoose.Schema({
                 required: true
 
             }],
+             tool: {
+                type: String,
+                required: true
+            },
             childResponse: String,
             date: Date,
         }]
@@ -85,6 +97,10 @@ const interventionPlanSchema = mongoose.Schema({
                 required: true
 
             }],
+             tool: {
+                type: String,
+                required: true
+            },
             childResponse: String,
             date: Date,
         }]
@@ -107,15 +123,15 @@ const interventionPlanSchema = mongoose.Schema({
                 required: true
 
             }],
+             tool: {
+                type: String,
+                required: true
+            },
             childResponse: String,
             date: Date,
         }]
 
     },
-    mentionToolUsedForRespectiveGoal: {
-        type: String,
-        required: true
-    }
 });
 
 const InterventionPlan = mongoose.model("InterventionPlan", interventionPlanSchema)

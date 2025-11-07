@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import mongoose from "mongoose";
 import AssignmentDetail from "../models/assignmentDetail.js";
 import ChildProfile from "../models/childProfile.js";
@@ -104,7 +105,6 @@ const createdAssignment = await AssignmentDetail.create([{
       week3,
       week4,
       week5,
-      mentionToolUsedForRespectiveGoal,
     } = interventionPlan || {};
  
     if (
@@ -112,8 +112,7 @@ const createdAssignment = await AssignmentDetail.create([{
       !week2 ||
       !week3 ||
       !week4 ||
-      !week5 ||
-      !mentionToolUsedForRespectiveGoal
+      !week5
     ) {
       return res.status(400).json({
         success: false,
@@ -127,6 +126,7 @@ const createdAssignment = await AssignmentDetail.create([{
         if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
         if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
         if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
+        
       }
       return true;
     };
@@ -144,7 +144,6 @@ const createdAssignment = await AssignmentDetail.create([{
   week3,
   week4,
   week5,
-  mentionToolUsedForRespectiveGoal,
 }], { session });
  
 const createdOSIT = await OSITAssignment.create([{
