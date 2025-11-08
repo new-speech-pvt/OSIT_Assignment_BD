@@ -28,6 +28,7 @@ const generateToken = (participantId) => {
  * Registers a new participant and returns a JWT token.
  */
 const registerParticipant = async (req, res) => {
+  console.log("req aayi")
   const session = await mongoose.startSession();
   session.startTransaction();
  

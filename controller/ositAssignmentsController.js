@@ -39,22 +39,22 @@ const createOSITAssignment = async (req, res) => {
     }
 
     const {
-      fname: childFname,
-      mname: childMname,
-      lname: childLname,
-      dob: childDob,
-      gender: childGender,
+      fName,
+      mName,
+      lName,
+      dob,
+      gender,
       diagnosis,
       presentComplaint,
       medicalHistory,
     } = childProfile || {};
 
     if (
-      !childFname ||
-      !childMname ||
-      !childLname ||
-      !childDob ||
-      !childGender ||
+      !fName ||
+      !mName ||
+      !lName ||
+      !dob ||
+      !gender ||
       !diagnosis ||
       !presentComplaint ||
       !medicalHistory
@@ -68,11 +68,11 @@ const createOSITAssignment = async (req, res) => {
     const createdChild = await ChildProfile.create(
       [
         {
-          fname: childFname,
-          mname: childMname,
-          lname: childLname,
-          dob: childDob,
-          gender: childGender,
+          fName,
+          mName,
+          lName,
+          dob,
+          gender,
           diagnosis,
           presentComplaint,
           medicalHistory,
@@ -112,69 +112,64 @@ const createOSITAssignment = async (req, res) => {
       { session }
     );
 
-    const {
-      week1,
-      week2,
-      week3,
-      week4,
-      week5,
-    } = interventionPlan || {};
+    // Dynamically extract all available weeks from the plan
+const weekKeys = Object.keys(interventionPlan || {});
+if (weekKeys.length < 2) {
+  return res.status(400).json({
+    success: false,
+    message: "At least 2 weeks are required in the intervention plan.",
+  });
+}
 
-    if (
-      !week1 ||
-      !week2 ||
-      !week3 ||
-      !week4 ||
-      !week5
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "All 5 weeks and mentionToolUsedForRespectiveGoal are required.",
-      });
-    }
 
-    const validateWeek = (week) => {
-      if (
-        !week.sessions ||
-        !Array.isArray(week.sessions) ||
-        week.sessions.length === 0
-      )
-        return false;
-      for (const session of week.sessions) {
-        if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
-        if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
-        if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
-        
-      }
-      return true;
-    };
+const validateWeek = (week) => {
+  if (!week.sessions || !Array.isArray(week.sessions) || week.sessions.length === 0) {
+    return false;
+  }
 
-    if (![week1, week2, week3, week4, week5].every(validateWeek)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid week structure: each session must have sessionNo, goal[], and activity[].",
-      });
-    }
- 
-  const createdIntervention = await InterventionPlan.create([{
-  week1,
-  week2,
-  week3,
-  week4,
-  week5,
-}], { session });
- 
-const createdOSIT = await OSITAssignment.create([{
-   event:event,
-  participantInfo: participant._id,
-  childProfile: createdChild[0]._id,
-  assignmentDetail: createdAssignment[0]._id,
-  interventionPlan: createdIntervention[0]._id,
- 
-}], { session });
- 
+  for (const session of week.sessions) {
+    if (!session.sessionNo || typeof session.sessionNo !== "number") return false;
+    if (!Array.isArray(session.goal) || session.goal.length === 0) return false;
+    if (!Array.isArray(session.activity) || session.activity.length === 0) return false;
+    if (!session.tool?.trim()) return false;
+    if (!session.childResponse?.trim()) return false;
+    if (!session.date) return false;
+  }
+  return true;
+};
+
+// ✅ Validate dynamically based on actual weekKeys
+const invalidWeeks = weekKeys.filter((key) => !validateWeek(interventionPlan[key]));
+
+if (invalidWeeks.length > 0) {
+  return res.status(400).json({
+    success: false,
+    message: `Invalid data in: ${invalidWeeks.join(", ")}. Each week must have at least 1 valid session.`,
+  });
+}
+
+
+   const dynamicWeeks = {};
+weekKeys.forEach((key) => {
+  dynamicWeeks[key] = interventionPlan[key];
+});
+
+const createdIntervention = await InterventionPlan.create([dynamicWeeks], { session });
+
+
+    const createdOSIT = await OSITAssignment.create(
+      [
+        {
+          event: event,
+          participantInfo: participant._id,
+          childProfile: createdChild[0]._id,
+          assignmentDetail: createdAssignment[0]._id,
+          interventionPlan: createdIntervention[0]._id,
+        },
+      ],
+      { session }
+    );
+
     await session.commitTransaction();
 
     return res.status(201).json({
@@ -213,6 +208,8 @@ const getAllAssignmentsWithScoring = async (req, res) => {
 
     const pipeline = [
       { $sort: { createdAt: -1 } },
+
+      // 🧩 Include scoring lookup
       {
         $lookup: {
           from: "assessmentscorings",
@@ -227,14 +224,32 @@ const getAllAssignmentsWithScoring = async (req, res) => {
           preserveNullAndEmptyArrays: true,
         },
       },
+
+      // 🧩 Include event lookup
+      {
+        $lookup: {
+          from: "events",
+          localField: "event",
+          foreignField: "_id",
+          as: "event",
+        },
+      },
+      {
+        $unwind: {
+          path: "$event",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
     ];
 
+    // 🧩 Status filtering
     if (status === "scored") {
       pipeline.push({ $match: { "scoring._id": { $exists: true } } });
     } else if (status === "unscored") {
       pipeline.push({ $match: { scoring: null } });
     }
 
+    // 🧮 Add scoring totals
     pipeline.push({
       $addFields: {
         hasScoring: { $ifNull: ["$scoring", false] },
@@ -255,6 +270,7 @@ const getAllAssignmentsWithScoring = async (req, res) => {
       },
     });
 
+    // 🧾 Final projection
     pipeline.push({
       $project: {
         _id: 1,
@@ -262,6 +278,13 @@ const getAllAssignmentsWithScoring = async (req, res) => {
         childProfile: 1,
         assignmentDetail: 1,
         interventionPlan: 1,
+        event: {
+          _id: 1,
+          name: 1,
+          startDate: 1,
+          endDate: 1,
+          location: 1,
+        },
         createdAt: 1,
         updatedAt: 1,
         scoring: {
@@ -279,6 +302,7 @@ const getAllAssignmentsWithScoring = async (req, res) => {
 
     const assignments = await OSITAssignment.aggregate(pipeline);
 
+    // 🧠 Populate participant, child, etc.
     const populatedAssignments = await OSITAssignment.populate(assignments, [
       {
         path: "participantInfo",
@@ -306,10 +330,12 @@ const getAllAssignmentsWithScoring = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "An internal server error occurred.",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      error:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
+
 
 // ✅ GET SINGLE ASSIGNMENT BY ID
 const getOSITAssignmentById = async (req, res) => {
@@ -328,7 +354,7 @@ const getOSITAssignmentById = async (req, res) => {
       .populate("participantInfo", "fName lName email phone")
       .populate(
         "childProfile",
-        "name dob gender diagnosis presentComplaint medicalHistory"
+        "fName mName lName dob gender diagnosis presentComplaint medicalHistory"
       )
       .populate(
         "assignmentDetail",

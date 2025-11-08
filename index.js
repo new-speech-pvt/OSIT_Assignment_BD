@@ -13,7 +13,7 @@ const port = 3001;
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://osit-assignment-fd.onrender.com", "https://osit.speechgears.com"],
+    origin: ["http://localhost:5173", "https://osit-assignment-fd.onrender.com", "https://osit.speechgears.com", "http://192.168.29.61:5173"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
