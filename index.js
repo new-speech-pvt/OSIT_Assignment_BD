@@ -6,6 +6,7 @@ import ositAssignment from "./Routes/ositAssignmentRoute.js";
 import { authRoutes } from "./Routes/auth.js";
 import { therapistRoutes } from "./Routes/therapistRoute.js";
 import { eventRouter } from "./Routes/event.js";
+import axios from "axios";
 
 const app = express();
 const port = 3001;
@@ -22,8 +23,21 @@ app.use(
 //Database
 await dbconnection();
 
+const keepActive = async() =>{
+  const url = "https://osit-assignment-bd.onrender.com"
+
+  try {
+    await axios.get(url);
+    console.log("Status ok")
+  } catch (e) {
+    console.log(e.message)
+  }
+}
+
+setInterval(keepActive, 180000)
+
 app.get("/", (req, res) => {
-  res.send("this is my localhost");
+  res.send("Working");
 });
 
 app.use("/participant", authRoutes);
